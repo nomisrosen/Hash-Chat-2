@@ -43,6 +43,24 @@ body {
     color: var(--text-secondary);
     position: relative;
     z-index: 100;
+    transition: width 0.3s ease;
+    background-color: rgb(237, 232, 215);
+}
+
+.sidebar.expanded {
+    width: 200px;
+    align-items: flex-start;
+    /* Revert to left align */
+    padding-left: 16px;
+}
+
+.sidebar.expanded .sidebar-icon {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    /* Left align icon content */
+    gap: 12px;
 }
 
 .sidebar-icon {
@@ -128,13 +146,20 @@ body {
     margin-top: 20px;
     padding-top: 20px;
     border-top: 1px solid var(--border-color);
+    align-items: center;
+    /* Ensure centering in collapsed mode */
+}
+
+.sidebar.expanded .sidebar-tabs {
+    align-items: flex-start;
+    /* Left align tabs */
 }
 
 .tab-item {
     width: 32px;
     height: 32px;
     border-radius: 8px;
-    background-color: var(--surface-color);
+    background-color: rgb(232, 224, 196);
     color: var(--text-secondary);
     display: flex;
     align-items: center;
@@ -145,10 +170,49 @@ body {
     transition: all 0.2s;
     text-transform: uppercase;
     border: 1px solid transparent;
+    flex-shrink: 0;
+}
+
+.sidebar.expanded .tab-item {
+    width: 100%;
+    /* Full width */
+    justify-content: flex-start;
+    /* Left align text */
+    padding-left: 12px;
+    border-radius: 6px;
+    height: auto;
+    padding: 8px 12px;
+}
+
+.sidebar.expanded .tab-item:hover {
+    background-color: rgb(153, 149, 135);
+    /* Mid-tone grey */
+}
+
+.tab-name {
+    display: none;
+    margin-left: 10px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar.expanded .tab-name {
+    display: block;
+}
+
+.tab-initials {
+    display: block;
+}
+
+.sidebar.expanded .tab-initials {
+    display: none;
 }
 
 .tab-item:hover {
-    background-color: var(--surface-hover);
+    background-color: rgb(153, 149, 135);
     color: var(--text-color);
 }
 
@@ -197,29 +261,53 @@ h1 {
     color: var(--text-color);
     display: flex;
     align-items: center;
+    /* justify-content: center; Removed centering */
     gap: 8px;
+    flex-wrap: wrap;
 }
 
-.subtitle {
-    color: var(--text-secondary);
-    font-weight: 400;
+.landing-content-wrapper {
+    max-width: 300px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.username-badge {
+    background-color: rgb(232, 224, 196);
+    color: #d97757;
+    /* Reddish text color from screenshot */
+    border: none;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    width: 100px;
+    outline: none;
+    text-align: center;
+}
+
+.username-badge::placeholder {
+    color: rgba(217, 119, 87, 0.5);
 }
 
 .input-group {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 12px;
     background-color: var(--surface-color);
     padding: 8px;
     border-radius: 12px;
-    border: 1px solid var(--border-color);
+    /* border: 1px solid var(--border-color); */
+    align-items: center;
+    width: 100%;
+    /* margin: 0 auto; Removed margin auto since wrapper handles it */
 }
 
 .input-actions {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 0 8px 8px 8px;
+    padding: 0;
 }
 
 .action-left {
@@ -232,13 +320,11 @@ h1 {
 
 input#secret-phrase {
     width: 100%;
-    padding: 16px;
-    border: none;
-    background-color: transparent;
-    color: var(--text-color);
-    font-size: 1rem;
-    outline: none;
     font-family: inherit;
+    padding: 12px;
+    border: none;
+    /* Ensure no border on input itself */
+    outline: none;
 }
 
 input#secret-phrase::placeholder {
@@ -309,6 +395,18 @@ input#secret-phrase::placeholder {
     border: 1px solid var(--border-color);
 }
 
+.encryption-notice {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin: 1rem auto;
+    padding: 4px 12px;
+    background: var(--surface-color);
+    border-radius: 100px;
+    width: fit-content;
+    opacity: 0.8;
+}
+
 .decryption-error {
     color: #b85c5c !important;
     font-style: italic;
@@ -326,6 +424,8 @@ input#secret-phrase::placeholder {
     max-width: 800px;
     width: 100%;
     margin: 0 auto;
+    min-height: 0;
+    /* Crucial for flex nested scrolling */
 }
 
 .message {
@@ -528,4 +628,66 @@ input#secret-phrase::placeholder {
     .chat-input-container {
         padding: 1rem;
     }
+}
+
+/* Typing Indicator */
+.typing-indicator {
+    padding: 0 2rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-style: italic;
+    height: 20px;
+    margin-bottom: -1.5rem;
+    margin-left: 1rem;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.typing-indicator.active {
+    opacity: 1;
+}
+
+/* Image Modal */
+.image-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.8);
+    align-items: center;
+    justify-content: center;
+}
+
+.image-modal.active {
+    display: flex;
+}
+
+.modal-content {
+    max-width: 90%;
+    max-height: 90%;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.close-modal {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    color: #f1f1f1;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.close-modal:hover,
+.close-modal:focus {
+    color: #bbb;
+    text-decoration: none;
+    cursor: pointer;
 }

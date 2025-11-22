@@ -12,6 +12,15 @@ const msgInput = document.getElementById('msg-input');
 const leaveBtn = document.getElementById('leave-btn');
 const fileInput = document.getElementById('file-input');
 const imagePreviewArea = document.getElementById('image-preview-area');
+const typingIndicator = document.getElementById('typing-indicator');
+const sidebar = document.getElementById('main-sidebar');
+const sidebarToggle = document.getElementById('sidebar-toggle');
+const usernameInput = document.getElementById('username-input'); // Added username input element
+
+// Modal Elements
+const imageModal = document.getElementById('image-modal');
+const modalImage = document.getElementById('modal-image');
+const closeModal = document.querySelector('.close-modal');
 
 let currentUsername = '';
 let currentImage = null;
@@ -29,7 +38,7 @@ async function hashPhrase(phrase) {
 }
 
 // Join Room Logic
-async function joinRoom(phrase) {
+async function joinRoom(phrase, customUsername = null) { // Updated to accept customUsername
     if (!phrase) return;
 
     const roomId = await hashPhrase(phrase);
@@ -58,7 +67,7 @@ async function joinRoom(phrase) {
 
     socket.auth = { roomId };
     socket.connect();
-    socket.emit('joinRoom', roomId);
+    socket.emit('joinRoom', roomId, customUsername); // Pass customUsername to socket.emit
 
     // Update UI
     landingPage.classList.add('hidden');
@@ -67,16 +76,28 @@ async function joinRoom(phrase) {
     if (roomNameDisplay) roomNameDisplay.textContent = phrase;
 
     chatMessages.innerHTML = '';
+
+    // Add encryption notice
+    const notice = document.createElement('div');
+    notice.classList.add('encryption-notice');
+    notice.textContent = 'Messages are end-to-end encrypted';
+    chatMessages.appendChild(notice);
+
     clearImagePreview();
     updateActiveTab();
 }
 
+// Sidebar Toggle
+sidebarToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('expanded');
+});
+
 // Join Room Events (Landing Page)
-joinBtn.addEventListener('click', () => joinRoom(secretInput.value.trim()));
+joinBtn.addEventListener('click', () => joinRoom(secretInput.value.trim(), usernameInput.value.trim())); // Pass username
 
 secretInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
-        joinRoom(secretInput.value.trim());
+        joinRoom(secretInput.value.trim(), usernameInput.value.trim()); // Pass username
     }
 });
 
@@ -177,10 +198,42 @@ chatForm.addEventListener('submit', async (e) => {
     msgInput.focus();
 });
 
+// Typing Indicator Logic
+let typingTimeout;
+
+msgInput.addEventListener('input', () => {
+    if (currentRoomId) {
+        socket.emit('typing');
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => {
+            socket.emit('stopTyping');
+        }, 1000);
+    }
+});
+
+socket.on('userTyping', (data) => {
+    typingIndicator.textContent = `${data.username} is typing...`;
+    typingIndicator.classList.add('active');
+});
+
+socket.on('userStoppedTyping', () => {
+    typingIndicator.classList.remove('active');
+});
+
 // Socket Events
-socket.on('history', (messages) => {
+socket.on('history', async (messages) => {
     chatMessages.innerHTML = '';
-    messages.forEach(addMessageToUI);
+
+    // Re-add encryption notice
+    const notice = document.createElement('div');
+    notice.classList.add('encryption-notice');
+    notice.textContent = 'Messages are end-to-end encrypted';
+    chatMessages.appendChild(notice);
+
+    // Process messages sequentially to maintain order
+    for (const msg of messages) {
+        await addMessageToUI(msg);
+    }
     scrollToBottom();
 });
 
@@ -218,9 +271,10 @@ async function addMessageToUI(msg) {
             const img = document.createElement('img');
             img.src = msg.content;
             img.onclick = () => {
-                const w = window.open('');
-                w.document.write('<img src="' + msg.content + '" style="max-width:100%">');
+                modalImage.src = msg.content;
+                imageModal.classList.add('active');
             };
+            img.onload = () => scrollToBottom(); // Ensure scroll after load
             contentDiv.appendChild(img);
         } else if (msg.type === 'encrypted') {
             // Decrypt the message
@@ -271,9 +325,10 @@ document.addEventListener('click', (e) => {
 
 async function handleNewChat() {
     const phrase = newChatInput.value.trim();
-    if (!phrase) return;
+    const customUsername = usernameInput.value.trim(); // Get username from input
+    if (!phrase) return; // Only proceed if phrase is not empty
 
-    await joinRoom(phrase);
+    await joinRoom(phrase, customUsername); // Pass customUsername
 
     newChatInput.value = '';
     newChatPopout.classList.remove('active');
@@ -286,6 +341,23 @@ newChatInput.addEventListener('keydown', (e) => {
 });
 
 newChatGoBtn.addEventListener('click', handleNewChat);
+
+// Modal Logic
+closeModal.onclick = () => {
+    imageModal.classList.remove('active');
+};
+
+window.onclick = (event) => {
+    if (event.target === imageModal) {
+        imageModal.classList.remove('active');
+    }
+};
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && imageModal.classList.contains('active')) {
+        imageModal.classList.remove('active');
+    }
+});
 
 // Sidebar Tabs Logic
 function renderSidebarTabs() {
@@ -314,7 +386,17 @@ function renderSidebarTabs() {
     activeRooms.forEach(room => {
         const tab = document.createElement('div');
         tab.classList.add('tab-item');
-        tab.textContent = room.name.substring(0, 2); // Initials
+
+        const initials = document.createElement('span');
+        initials.classList.add('tab-initials');
+        initials.textContent = room.name.substring(0, 2);
+        tab.appendChild(initials);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.classList.add('tab-name');
+        nameSpan.textContent = room.name;
+        tab.appendChild(nameSpan);
+
         tab.title = room.name;
         tab.onclick = () => joinRoom(room.name);
 

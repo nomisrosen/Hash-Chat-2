@@ -5,7 +5,9 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = socketIo(server, {
+    maxHttpBufferSize: 1e8 // 100 MB
+});
 
 // Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
@@ -24,14 +26,31 @@ function generateUsername() {
     return `Anonymous ${adj} ${animal}`;
 }
 
+// New helper functions for user management and message formatting
+function userJoin(id, username, room) {
+    const user = { id, username, room };
+    users[id] = user;
+    return user;
+}
+
+function formatMessage(username, text) {
+    return {
+        user: username,
+        type: 'text',
+        content: text,
+        timestamp: new Date().toISOString()
+    };
+}
+
 io.on('connection', (socket) => {
     console.log('New client connected');
 
-    socket.on('joinRoom', (roomId) => {
-        const username = generateUsername();
-        socket.join(roomId);
+    socket.on('joinRoom', (roomId, customUsername) => {
+        const user = userJoin(socket.id, customUsername || generateUsername(), roomId);
+        socket.join(user.room);
 
-        users[socket.id] = { username, roomId };
+        // Send welcome message
+        socket.emit('message', formatMessage('System', 'Welcome to Hash Chat!'));
 
         // Initialize room if not exists
         if (!rooms[roomId]) {
@@ -42,13 +61,13 @@ io.on('connection', (socket) => {
         socket.emit('history', rooms[roomId]);
 
         // Tell client their username
-        socket.emit('joined', { username });
+        socket.emit('joined', { username: user.username });
 
         // Notify room
         io.to(roomId).emit('message', {
             user: 'System',
             type: 'text',
-            content: `${username} has joined the chat`,
+            content: `${user.username} has joined the chat`,
             timestamp: new Date().toISOString()
         });
     });
@@ -75,22 +94,36 @@ io.on('connection', (socket) => {
             }
 
             // Store message
-            if (rooms[user.roomId]) {
-                rooms[user.roomId].push(messagePayload);
+            if (rooms[user.room]) {
+                rooms[user.room].push(messagePayload);
                 // Keep only last 100 messages
-                if (rooms[user.roomId].length > 100) {
-                    rooms[user.roomId].shift();
+                if (rooms[user.room].length > 100) {
+                    rooms[user.room].shift();
                 }
             }
 
-            io.to(user.roomId).emit('message', messagePayload);
+            io.to(user.room).emit('message', messagePayload);
+        }
+    });
+
+    socket.on('typing', () => {
+        const user = users[socket.id];
+        if (user) {
+            socket.to(user.room).emit('userTyping', { username: user.username });
+        }
+    });
+
+    socket.on('stopTyping', () => {
+        const user = users[socket.id];
+        if (user) {
+            socket.to(user.room).emit('userStoppedTyping', { username: user.username });
         }
     });
 
     socket.on('disconnect', () => {
         const user = users[socket.id];
         if (user) {
-            io.to(user.roomId).emit('message', {
+            io.to(user.room).emit('message', {
                 user: 'System',
                 type: 'text',
                 content: `${user.username} has left the chat`,
