@@ -47,30 +47,40 @@ io.on('connection', (socket) => {
         // Notify room
         io.to(roomId).emit('message', {
             user: 'System',
-            text: `${username} has joined the chat`,
+            type: 'text',
+            content: `${username} has joined the chat`,
             timestamp: new Date().toISOString()
         });
     });
 
-    socket.on('chatMessage', (msg) => {
+    socket.on('chatMessage', (msgData) => {
         const user = users[socket.id];
         if (user) {
-            const messageData = {
+            // msgData can be string (legacy) or object { type, content }
+            // Normalize to object
+            let messagePayload = {
                 user: user.username,
-                text: msg,
                 timestamp: new Date().toISOString()
             };
 
+            if (typeof msgData === 'string') {
+                messagePayload.type = 'text';
+                messagePayload.content = msgData;
+            } else {
+                messagePayload.type = msgData.type || 'text';
+                messagePayload.content = msgData.content;
+            }
+
             // Store message
             if (rooms[user.roomId]) {
-                rooms[user.roomId].push(messageData);
+                rooms[user.roomId].push(messagePayload);
                 // Keep only last 100 messages
                 if (rooms[user.roomId].length > 100) {
                     rooms[user.roomId].shift();
                 }
             }
 
-            io.to(user.roomId).emit('message', messageData);
+            io.to(user.roomId).emit('message', messagePayload);
         }
     });
 
@@ -79,7 +89,8 @@ io.on('connection', (socket) => {
         if (user) {
             io.to(user.roomId).emit('message', {
                 user: 'System',
-                text: `${user.username} has left the chat`,
+                type: 'text',
+                content: `${user.username} has left the chat`,
                 timestamp: new Date().toISOString()
             });
             delete users[socket.id];

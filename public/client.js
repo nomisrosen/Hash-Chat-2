@@ -50,12 +50,34 @@ leaveBtn.addEventListener('click', () => {
     chatMessages.innerHTML = '';
 });
 
+const fileInput = document.getElementById('file-input');
+
+// Image Upload
+fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Limit size to 2MB
+    if (file.size > 2 * 1024 * 1024) {
+        alert('Image too large (max 2MB)');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        const base64 = reader.result;
+        socket.emit('chatMessage', { type: 'image', content: base64 });
+    };
+    reader.readAsDataURL(file);
+    fileInput.value = ''; // Reset
+});
+
 // Send Message
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const msg = msgInput.value.trim();
     if (msg) {
-        socket.emit('chatMessage', msg);
+        socket.emit('chatMessage', { type: 'text', content: msg });
         msgInput.value = '';
         msgInput.focus();
     }
@@ -83,7 +105,7 @@ function addMessageToUI(msg) {
 
     if (msg.user === 'System') {
         div.classList.add('system');
-        div.textContent = msg.text;
+        div.textContent = msg.content;
     } else {
         if (msg.user === currentUsername) {
             div.classList.add('own');
@@ -95,11 +117,20 @@ function addMessageToUI(msg) {
         meta.classList.add('message-meta');
         meta.textContent = msg.user;
 
-        const text = document.createElement('div');
-        text.textContent = msg.text;
+        const contentDiv = document.createElement('div');
+        contentDiv.classList.add('message-content');
+
+        if (msg.type === 'image') {
+            const img = document.createElement('img');
+            img.src = msg.content;
+            img.onclick = () => window.open(msg.content, '_blank');
+            contentDiv.appendChild(img);
+        } else {
+            contentDiv.textContent = msg.content;
+        }
 
         div.appendChild(meta);
-        div.appendChild(text);
+        div.appendChild(contentDiv);
     }
 
     chatMessages.appendChild(div);
