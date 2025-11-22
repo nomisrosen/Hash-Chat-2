@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fiber Chat</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Landing Section -->
+        <div id="landing-page" class="container">
+            <div class="content">
+                <h1>Fiber Chat</h1>
+                <p class="subtitle">Enter the secret phrase to join a room.</p>
+                <div class="input-group">
+                    <input type="text" id="secret-phrase" placeholder="Secret Phrase" autocomplete="off">
+                    <button id="join-btn">Join Room</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Section -->
+        <div id="chat-page" class="container hidden">
+            <header class="chat-header">
+                <div class="room-info">
+                    <h2>Room ID</h2>
+                    <span id="room-id-display" class="hash-display"></span>
+                </div>
+                <button id="leave-btn" class="secondary-btn">Leave</button>
+            </header>
+            
+            <div id="chat-messages" class="chat-messages">
+                <!-- Messages will appear here -->
+            </div>
+
+            <form id="chat-form" class="chat-input-area">
+                <input type="text" id="msg-input" placeholder="Type a message..." autocomplete="off">
+                <button type="submit">Send</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>
