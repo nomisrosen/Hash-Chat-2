@@ -296,6 +296,25 @@ input#secret-phrase::placeholder {
     color: var(--text-color);
 }
 
+.encryption-badge {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background: var(--surface-color);
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0.8;
+    border: 1px solid var(--border-color);
+}
+
+.decryption-error {
+    color: #b85c5c !important;
+    font-style: italic;
+    opacity: 0.8;
+}
+
 .chat-messages {
     flex: 1;
     padding: 2rem;

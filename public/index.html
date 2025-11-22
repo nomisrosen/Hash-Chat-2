@@ -76,6 +76,7 @@
             <header class="chat-header">
                 <div style="display: flex; align-items: baseline; gap: 8px;">
                     <h2>Hash Chat</h2>
+                    <span class="encryption-badge" title="Messages are end-to-end encrypted">🔒 Encrypted</span>
                     <span id="room-name-display"
                         style="color: var(--text-secondary); font-size: 0.9rem; opacity: 0.7;"></span>
                 </div>
@@ -115,6 +116,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="crypto.js"></script>
     <script src="client.js"></script>
 </body>
 

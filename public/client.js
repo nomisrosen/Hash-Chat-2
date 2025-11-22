@@ -35,6 +35,16 @@ async function joinRoom(phrase) {
     const roomId = await hashPhrase(phrase);
     currentRoomId = roomId;
 
+    // Derive encryption key from the phrase
+    try {
+        await cryptoManager.deriveKey(phrase);
+        console.log('🔒 Encryption key derived successfully');
+    } catch (error) {
+        console.error('Failed to derive encryption key:', error);
+        alert('Failed to initialize encryption. Please try again.');
+        return;
+    }
+
     // Add to active rooms if not exists
     if (!activeRooms.find(r => r.id === roomId)) {
         activeRooms.push({ id: roomId, name: phrase });
@@ -80,10 +90,13 @@ leaveBtn.addEventListener('click', () => {
     clearImagePreview();
     currentRoomId = null;
 
+    // Clear encryption key for security
+    cryptoManager.clearKey();
+    console.log('🔓 Encryption key cleared');
+
     // Remove from active rooms? Or keep it? 
     // User said "tab across chat's they've opened", implying keeping them.
     // But "Leave" usually implies closing. Let's keep it simple: Leave = Close tab.
-    activeRooms = activeRooms.filter(r => r.id !== currentRoomId); // Wait, currentRoomId is null now.
     // Need to handle this better. For now, Leave just goes back to home.
     // If we want tabs to persist, we shouldn't remove them on "Leave", but maybe have a "Close" on the tab.
     // For this iteration, "Leave" will just go back to home, but tabs remain.
@@ -134,16 +147,29 @@ function clearImagePreview() {
 }
 
 // Send Message
-chatForm.addEventListener('submit', (e) => {
+chatForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const msg = msgInput.value.trim();
 
     if (msg) {
-        socket.emit('chatMessage', { type: 'text', content: msg });
-        msgInput.value = '';
+        try {
+            // Encrypt the message before sending
+            const { ciphertext, iv } = await cryptoManager.encrypt(msg);
+            socket.emit('chatMessage', {
+                type: 'encrypted',
+                ciphertext: ciphertext,
+                iv: iv
+            });
+            msgInput.value = '';
+        } catch (error) {
+            console.error('Encryption failed:', error);
+            alert('Failed to encrypt message. Please try rejoining the room.');
+            return;
+        }
     }
 
     if (currentImage) {
+        // Images are sent unencrypted for now
         socket.emit('chatMessage', { type: 'image', content: currentImage });
         clearImagePreview();
     }
@@ -167,7 +193,7 @@ socket.on('message', (msg) => {
     scrollToBottom();
 });
 
-function addMessageToUI(msg) {
+async function addMessageToUI(msg) {
     const div = document.createElement('div');
     div.classList.add('message');
 
@@ -196,7 +222,18 @@ function addMessageToUI(msg) {
                 w.document.write('<img src="' + msg.content + '" style="max-width:100%">');
             };
             contentDiv.appendChild(img);
+        } else if (msg.type === 'encrypted') {
+            // Decrypt the message
+            try {
+                const plaintext = await cryptoManager.decrypt(msg.ciphertext, msg.iv);
+                contentDiv.textContent = plaintext;
+            } catch (error) {
+                console.error('Decryption failed:', error);
+                contentDiv.textContent = '⚠️ Could not decrypt message';
+                contentDiv.classList.add('decryption-error');
+            }
         } else {
+            // Fallback for unencrypted messages (legacy)
             contentDiv.textContent = msg.content;
         }
 

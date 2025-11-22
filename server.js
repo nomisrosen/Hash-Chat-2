@@ -67,8 +67,11 @@ io.on('connection', (socket) => {
                 messagePayload.type = 'text';
                 messagePayload.content = msgData;
             } else {
-                messagePayload.type = msgData.type || 'text';
-                messagePayload.content = msgData.content;
+                // Spread all properties from msgData to preserve encrypted message fields
+                messagePayload = {
+                    ...messagePayload,
+                    ...msgData
+                };
             }
 
             // Store message
