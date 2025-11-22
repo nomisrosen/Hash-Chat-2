@@ -4,13 +4,19 @@ const landingPage = document.getElementById('landing-page');
 const chatPage = document.getElementById('chat-page');
 const secretInput = document.getElementById('secret-phrase');
 const joinBtn = document.getElementById('join-btn');
-const roomIdDisplay = document.getElementById('room-id-display');
+const roomIdDisplay = document.getElementById('room-id-display'); // Keeping this for legacy, though we use room-name-display now
+const roomNameDisplay = document.getElementById('room-name-display');
 const chatMessages = document.getElementById('chat-messages');
 const chatForm = document.getElementById('chat-form');
 const msgInput = document.getElementById('msg-input');
 const leaveBtn = document.getElementById('leave-btn');
+const fileInput = document.getElementById('file-input');
+const imagePreviewArea = document.getElementById('image-preview-area');
 
 let currentUsername = '';
+let currentImage = null;
+let activeRooms = []; // Array of { id, name }
+let currentRoomId = null;
 
 // Hashing Function
 async function hashPhrase(phrase) {
@@ -22,23 +28,46 @@ async function hashPhrase(phrase) {
     return hashHex;
 }
 
-// Join Room
-joinBtn.addEventListener('click', async () => {
-    const phrase = secretInput.value.trim();
+// Join Room Logic
+async function joinRoom(phrase) {
     if (!phrase) return;
 
     const roomId = await hashPhrase(phrase);
+    currentRoomId = roomId;
+
+    // Add to active rooms if not exists
+    if (!activeRooms.find(r => r.id === roomId)) {
+        activeRooms.push({ id: roomId, name: phrase });
+        renderSidebarTabs();
+    }
 
     // Connect socket
-    socket.auth = { roomId }; // Optional: send auth data if needed, but here we just join
-    socket.connect();
+    if (socket.connected) {
+        socket.disconnect();
+    }
 
+    socket.auth = { roomId };
+    socket.connect();
     socket.emit('joinRoom', roomId);
 
     // Update UI
     landingPage.classList.add('hidden');
     chatPage.classList.remove('hidden');
-    roomIdDisplay.textContent = roomId.substring(0, 12) + '...';
+    if (roomIdDisplay) roomIdDisplay.textContent = roomId.substring(0, 12) + '...';
+    if (roomNameDisplay) roomNameDisplay.textContent = phrase;
+
+    chatMessages.innerHTML = '';
+    clearImagePreview();
+    updateActiveTab();
+}
+
+// Join Room Events (Landing Page)
+joinBtn.addEventListener('click', () => joinRoom(secretInput.value.trim()));
+
+secretInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        joinRoom(secretInput.value.trim());
+    }
 });
 
 // Leave Room
@@ -48,39 +77,78 @@ leaveBtn.addEventListener('click', () => {
     chatPage.classList.add('hidden');
     secretInput.value = '';
     chatMessages.innerHTML = '';
+    clearImagePreview();
+    currentRoomId = null;
+
+    // Remove from active rooms? Or keep it? 
+    // User said "tab across chat's they've opened", implying keeping them.
+    // But "Leave" usually implies closing. Let's keep it simple: Leave = Close tab.
+    activeRooms = activeRooms.filter(r => r.id !== currentRoomId); // Wait, currentRoomId is null now.
+    // Need to handle this better. For now, Leave just goes back to home.
+    // If we want tabs to persist, we shouldn't remove them on "Leave", but maybe have a "Close" on the tab.
+    // For this iteration, "Leave" will just go back to home, but tabs remain.
+    updateActiveTab();
 });
 
-const fileInput = document.getElementById('file-input');
-
-// Image Upload
-fileInput.addEventListener('change', async (e) => {
+// Image Upload Handling
+fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Limit size to 2MB
     if (file.size > 2 * 1024 * 1024) {
         alert('Image too large (max 2MB)');
+        fileInput.value = '';
         return;
     }
 
     const reader = new FileReader();
     reader.onload = () => {
-        const base64 = reader.result;
-        socket.emit('chatMessage', { type: 'image', content: base64 });
+        currentImage = reader.result;
+        showImagePreview(currentImage);
     };
     reader.readAsDataURL(file);
-    fileInput.value = ''; // Reset
+    fileInput.value = '';
 });
+
+function showImagePreview(base64) {
+    imagePreviewArea.innerHTML = '';
+    const previewItem = document.createElement('div');
+    previewItem.classList.add('preview-item');
+
+    const img = document.createElement('img');
+    img.src = base64;
+
+    const removeBtn = document.createElement('div');
+    removeBtn.classList.add('preview-remove');
+    removeBtn.textContent = '✕';
+    removeBtn.onclick = () => clearImagePreview();
+
+    previewItem.appendChild(img);
+    previewItem.appendChild(removeBtn);
+    imagePreviewArea.appendChild(previewItem);
+}
+
+function clearImagePreview() {
+    currentImage = null;
+    imagePreviewArea.innerHTML = '';
+}
 
 // Send Message
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const msg = msgInput.value.trim();
+
     if (msg) {
         socket.emit('chatMessage', { type: 'text', content: msg });
         msgInput.value = '';
-        msgInput.focus();
     }
+
+    if (currentImage) {
+        socket.emit('chatMessage', { type: 'image', content: currentImage });
+        clearImagePreview();
+    }
+
+    msgInput.focus();
 });
 
 // Socket Events
@@ -123,7 +191,10 @@ function addMessageToUI(msg) {
         if (msg.type === 'image') {
             const img = document.createElement('img');
             img.src = msg.content;
-            img.onclick = () => window.open(msg.content, '_blank');
+            img.onclick = () => {
+                const w = window.open('');
+                w.document.write('<img src="' + msg.content + '" style="max-width:100%">');
+            };
             contentDiv.appendChild(img);
         } else {
             contentDiv.textContent = msg.content;
@@ -138,4 +209,93 @@ function addMessageToUI(msg) {
 
 function scrollToBottom() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Sidebar New Chat Logic
+const newChatIcon = document.getElementById('new-chat-icon');
+const newChatPopout = document.getElementById('new-chat-popout');
+const newChatInput = document.getElementById('new-chat-input');
+const newChatGoBtn = document.getElementById('new-chat-go-btn');
+
+newChatIcon.addEventListener('click', (e) => {
+    if (e.target === newChatInput || e.target === newChatGoBtn || (newChatGoBtn && newChatGoBtn.contains(e.target))) return;
+
+    newChatPopout.classList.toggle('active');
+    if (newChatPopout.classList.contains('active')) {
+        newChatInput.focus();
+    }
+});
+
+document.addEventListener('click', (e) => {
+    if (!newChatIcon.contains(e.target) && !newChatPopout.contains(e.target)) {
+        newChatPopout.classList.remove('active');
+    }
+});
+
+async function handleNewChat() {
+    const phrase = newChatInput.value.trim();
+    if (!phrase) return;
+
+    await joinRoom(phrase);
+
+    newChatInput.value = '';
+    newChatPopout.classList.remove('active');
+}
+
+newChatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        handleNewChat();
+    }
+});
+
+newChatGoBtn.addEventListener('click', handleNewChat);
+
+// Sidebar Tabs Logic
+function renderSidebarTabs() {
+    // Remove existing tabs first (keep icons)
+    const existingTabs = document.querySelectorAll('.tab-item');
+    existingTabs.forEach(t => t.remove());
+
+    const sidebar = document.querySelector('.sidebar');
+
+    // Create container if not exists
+    let tabsContainer = document.querySelector('.sidebar-tabs');
+    if (!tabsContainer) {
+        tabsContainer = document.createElement('div');
+        tabsContainer.classList.add('sidebar-tabs');
+        // Insert before newChatIcon or at a specific place
+        const newChatIconContainer = document.getElementById('new-chat-icon-container'); // Assuming a container for the icon
+        if (newChatIconContainer) {
+            sidebar.insertBefore(tabsContainer, newChatIconContainer);
+        } else {
+            sidebar.appendChild(tabsContainer);
+        }
+    } else {
+        tabsContainer.innerHTML = ''; // Clear
+    }
+
+    activeRooms.forEach(room => {
+        const tab = document.createElement('div');
+        tab.classList.add('tab-item');
+        tab.textContent = room.name.substring(0, 2); // Initials
+        tab.title = room.name;
+        tab.onclick = () => joinRoom(room.name);
+
+        if (room.id === currentRoomId) {
+            tab.classList.add('active');
+        }
+
+        tabsContainer.appendChild(tab);
+    });
+}
+
+function updateActiveTab() {
+    const tabs = document.querySelectorAll('.tab-item');
+    tabs.forEach(tab => {
+        if (tab.title === (activeRooms.find(r => r.id === currentRoomId)?.name || '')) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
 }
